@@ -21,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('resetButton').addEventListener('click', resetCanvas);
     document.getElementById('eraserButton').addEventListener('click', toggleEraser);
+    document.getElementById('downloadButton').addEventListener('click', downloadImage);
 
     function startDrawing(event) {
         drawing = true;
@@ -66,5 +67,25 @@ document.addEventListener('DOMContentLoaded', () => {
         eraserMode = !eraserMode;
         console.log(`Eraser mode is now: ${eraserMode}`); // Debugging line
         document.getElementById('eraserButton').innerText = `Eraser Mode: ${eraserMode ? 'On' : 'Off'}`;
+    }
+
+    function downloadImage(event) {
+        event.preventDefault(); // Prevent default action
+
+        const link = document.createElement('a');
+        link.download = 'canvas_image.png'; // Set the name of the downloaded file
+        link.href = canvas.toDataURL(); // Convert the canvas to a data URL
+
+        // Disable the button to prevent multiple clicks
+        const downloadButton = document.getElementById('downloadButton');
+        downloadButton.disabled = true;
+
+        // Trigger the download
+        link.click(); 
+
+        // Re-enable the button after a short delay
+        setTimeout(() => {
+            downloadButton.disabled = false;
+        }, 500); // Re-enable after 0.5 seconds
     }
 });
