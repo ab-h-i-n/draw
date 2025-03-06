@@ -43,14 +43,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const x = event.touches ? event.touches[0].clientX - rect.left : event.clientX - rect.left;
         const y = event.touches ? event.touches[0].clientY - rect.top : event.clientY - rect.top;
 
-        ctx.lineWidth = eraserMode ? 20 : 5; 
-        ctx.lineCap = 'round';
-        ctx.strokeStyle = eraserMode ? 'black' : 'white'; // Use white for drawing on black canvas
+        if (eraserMode) {
+            // Use clearRect to erase instead of drawing
+            ctx.clearRect(x - 10, y - 10, 20, 20); // Erase a 20x20 area around the touch/mouse position
+        } else {
+            ctx.lineWidth = 5; 
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'white'; // Use white for drawing on black canvas
 
-        ctx.lineTo(x, y);
-        ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(x, y);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(x, y);
+        }
     }
 
     function resetCanvas() {
