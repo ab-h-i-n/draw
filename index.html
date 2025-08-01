@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drawing Board</title>
+    <title>Collaborative Drawing Board</title>
     <!-- Tailwind CSS for styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts for a cleaner look -->
@@ -85,9 +85,32 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
         </button>
     </div>
+    
+    <!-- User ID display -->
+    <div id="userIdContainer" class="fixed bottom-4 left-4 bg-gray-800/50 backdrop-blur-sm text-white text-xs p-2 rounded-lg z-10">
+        Your User ID: <span id="userId"></span>
+    </div>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, query, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDHjr4mdMfe7ZpwpBy7HJvNkwhtrcnwEo8",
+            authDomain: "draw-1a5af.firebaseapp.com",
+            projectId: "draw-1a5af",
+            storageBucket: "draw-1a5af.appspot.com",
+            messagingSenderId: "51020034526",
+            appId: "1:51020034526:web:b58776091648039909ad4f"
+        };
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        document.addEventListener('DOMContentLoaded', async () => {
             // --- Element Selection ---
             const canvas = document.getElementById('drawingCanvas');
             const ctx = canvas.getContext('2d');
@@ -100,6 +123,7 @@
             const brushSizeLabel = document.getElementById('brushSizeLabel');
             const resetBtn = document.getElementById('resetBtn');
             const downloadBtn = document.getElementById('downloadBtn');
+            const userIdSpan = document.getElementById('userId');
 
             // --- State Variables ---
             let isDrawing = false;
@@ -108,20 +132,31 @@
             let brushColor = '#FFFFFF';
             let lastX = 0;
             let lastY = 0;
+            let userId;
+
+            // --- Firebase Auth ---
+            try {
+                if (typeof __initial_auth_token !== 'undefined') {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser.uid;
+                userIdSpan.textContent = userId;
+            } catch (error) {
+                console.error("Authentication Error:", error);
+                userIdSpan.textContent = "Auth Error";
+                return; // Stop execution if auth fails
+            }
+
+            const drawingCollection = collection(db, `artifacts/${appId}/public/data/drawing`);
 
             // --- Canvas Setup ---
             function resizeCanvas() {
-                // Save canvas content before resizing
                 const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Resize canvas to fill the window
                 canvas.width = window.innerWidth;
                 canvas.height = window.innerHeight;
-
-                // Restore canvas content after resizing
                 ctx.putImageData(imageData, 0, 0);
-
-                // Re-apply drawing settings as they can be reset on resize
                 applyBrushSettings();
             }
 
@@ -130,13 +165,11 @@
                 ctx.lineJoin = 'round';
                 ctx.lineWidth = brushSize;
                 ctx.strokeStyle = brushColor;
-                // Set the composite operation based on the active tool
                 ctx.globalCompositeOperation = activeTool === 'brush' ? 'source-over' : 'destination-out';
             }
 
             // --- Drawing Logic ---
             function getEventPosition(event) {
-                // Handles both mouse and touch events
                 const rect = canvas.getBoundingClientRect();
                 if (event.touches && event.touches.length > 0) {
                     return {
@@ -154,18 +187,35 @@
                 isDrawing = true;
                 const { x, y } = getEventPosition(event);
                 [lastX, lastY] = [x, y];
+                // Immediately draw a dot on start
+                draw(event, true);
             }
 
-            function draw(event) {
+            async function draw(event, isDot = false) {
                 if (!isDrawing) return;
-                event.preventDefault(); // Prevent scrolling on touch
+                event.preventDefault();
 
                 const { x, y } = getEventPosition(event);
                 
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(x, y);
-                ctx.stroke();
+                const drawData = {
+                    startX: lastX,
+                    startY: lastY,
+                    endX: x,
+                    endY: y,
+                    color: brushColor,
+                    size: brushSize,
+                    tool: activeTool,
+                    userId: userId
+                };
+
+                // Draw locally immediately for responsiveness
+                drawOnCanvas(drawData);
+
+                try {
+                    await addDoc(drawingCollection, drawData);
+                } catch (error) {
+                    console.error("Firestore Write Error:", error);
+                }
 
                 [lastX, lastY] = [x, y];
             }
@@ -180,34 +230,40 @@
                 if (tool === 'brush') {
                     brushBtn.classList.add('active');
                     eraserBtn.classList.remove('active');
-                    ctx.globalCompositeOperation = 'source-over'; // Normal drawing
-                    applyBrushSettings();
-                } else { // Eraser
+                } else {
                     eraserBtn.classList.add('active');
                     brushBtn.classList.remove('active');
-                    ctx.globalCompositeOperation = 'destination-out'; // Erases to transparent
                 }
+                applyBrushSettings();
             }
 
             function updateBrushSize(size) {
                 brushSize = size;
                 brushSizeLabel.textContent = size;
-                ctx.lineWidth = brushSize;
+                applyBrushSettings();
             }
 
             function updateBrushColor(color) {
                 brushColor = color;
                 colorPreview.style.backgroundColor = color;
-                // Only change strokeStyle if the brush is active
-                if (activeTool === 'brush') {
-                    ctx.strokeStyle = brushColor;
-                }
+                applyBrushSettings();
             }
 
-            function clearCanvas() {
-                // A confirmation dialog to prevent accidental clearing
-                if (confirm('Are you sure you want to clear the canvas?')) {
+            async function clearCanvas() {
+                if (confirm('Are you sure you want to clear the canvas for everyone?')) {
+                    // Clear local canvas immediately
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Delete documents in Firestore
+                    const q = query(drawingCollection);
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach(async (doc) => {
+                        try {
+                            await deleteDoc(doc.ref);
+                        } catch (error) {
+                            console.error("Error deleting document:", error);
+                        }
+                    });
                 }
             }
 
@@ -217,20 +273,67 @@
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             }
+            
+            // --- Draw from Firestore data ---
+            function drawOnCanvas(data) {
+                const originalCompositeOperation = ctx.globalCompositeOperation;
+                const originalStrokeStyle = ctx.strokeStyle;
+                const originalLineWidth = ctx.lineWidth;
+
+                ctx.globalCompositeOperation = data.tool === 'brush' ? 'source-over' : 'destination-out';
+                ctx.strokeStyle = data.color;
+                ctx.lineWidth = data.size;
+                ctx.beginPath();
+                ctx.moveTo(data.startX, data.startY);
+                ctx.lineTo(data.endX, data.endY);
+                ctx.stroke();
+
+                ctx.globalCompositeOperation = originalCompositeOperation;
+                ctx.strokeStyle = originalStrokeStyle;
+                ctx.lineWidth = originalLineWidth;
+            }
+            
+            // --- Firestore Listener ---
+            const unsubscribe = onSnapshot(drawingCollection, (snapshot) => {
+                snapshot.docChanges().forEach((change) => {
+                    const data = change.doc.data();
+                    // To prevent re-drawing our own lines which are now drawn locally first
+                    if (change.type === "added" && data.userId !== userId) { 
+                        drawOnCanvas(data);
+                    }
+                    // Handle remote clearing of canvas
+                    if (change.type === "removed") {
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        loadDrawing(); // Redraw remaining items
+                    }
+                });
+            }, (error) => {
+                console.error("Firestore Snapshot Error:", error);
+            });
+
+            // --- Load existing drawing ---
+            async function loadDrawing() {
+                 try {
+                    const q = query(drawingCollection);
+                    const querySnapshot = await getDocs(q);
+                    querySnapshot.forEach((doc) => {
+                        drawOnCanvas(doc.data());
+                    });
+                 } catch (error) {
+                     console.error("Error loading initial drawing:", error);
+                 }
+            }
+
 
             // --- Event Listeners ---
-            // Drawing events
-            canvas.addEventListener('mousedown', startDrawing);
-            canvas.addEventListener('mousemove', draw);
-            canvas.addEventListener('mouseup', stopDrawing);
-            canvas.addEventListener('mouseout', stopDrawing); // Stop if mouse leaves canvas
+            canvas.addEventListener("mousedown", startDrawing);
+            canvas.addEventListener("mousemove", draw);
+            canvas.addEventListener("mouseup", stopDrawing);
+            canvas.addEventListener("mouseout", stopDrawing);
+            canvas.addEventListener("touchstart", startDrawing, { passive: false });
+            canvas.addEventListener("touchmove", draw, { passive: false });
+            canvas.addEventListener("touchend", stopDrawing);
 
-            // Touch events
-            canvas.addEventListener('touchstart', startDrawing);
-            canvas.addEventListener('touchmove', draw);
-            canvas.addEventListener('touchend', stopDrawing);
-
-            // Toolbar controls
             colorPicker.addEventListener('input', (e) => updateBrushColor(e.target.value));
             brushSizeSlider.addEventListener('input', (e) => updateBrushSize(e.target.value));
             brushBtn.addEventListener('click', () => setActiveTool('brush'));
@@ -238,12 +341,12 @@
             resetBtn.addEventListener('click', clearCanvas);
             downloadBtn.addEventListener('click', downloadImage);
 
-            // Window resize
             window.addEventListener('resize', resizeCanvas);
 
             // --- Initialization ---
-            resizeCanvas(); // Set initial canvas size
-            setActiveTool('brush'); // Set brush as the default tool
+            resizeCanvas();
+            setActiveTool('brush');
+            await loadDrawing();
         });
     </script>
 </body>
