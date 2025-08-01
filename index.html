@@ -44,12 +44,11 @@
             border-radius: 50%;
         }
         /* Styles for the auto-hiding toolbar */
-        #toolbar-container {
+        #toolbar {
             transition: transform 0.3s ease-in-out;
         }
-        #toolbar-container.hidden {
-            /* Hides the toolbar but keeps the bottom 40px (the chevron area) visible */
-            transform: translate(-50%, calc(-100% + 40px));
+        #toolbar.hidden {
+            transform: translateY(-100%);
         }
         #toolbar-chevron.rotated {
             transform: rotate(180deg);
@@ -61,10 +60,10 @@
     <!-- The drawing canvas will take up the full screen -->
     <canvas id="drawingCanvas"></canvas>
 
-    <!-- Toolbar container for auto-hide functionality -->
-    <div id="toolbar-container" class="fixed top-0 left-1/2 -translate-x-1/2 w-auto z-10">
-        <!-- The actual toolbar -->
-        <div id="toolbar" class="bg-gray-800/50 backdrop-blur-sm shadow-lg rounded-b-xl p-2 flex flex-wrap justify-center items-center gap-2">
+    <!-- Toolbar container -->
+    <div class="fixed top-0 left-1/2 -translate-x-1/2 w-auto z-10">
+        <!-- The actual toolbar panel -->
+        <div id="toolbar" class="bg-gray-800/50 backdrop-blur-sm shadow-lg rounded-b-xl p-2 flex flex-wrap justify-center items-center gap-2 transition-all duration-500">
             <!-- Color Picker -->
             <div class="relative w-10 h-10">
                 <input type="color" id="colorPicker" value="#FFFFFF" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
@@ -97,15 +96,13 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
             </button>
         </div>
-        <!-- Chevron button to toggle toolbar visibility -->
-        <button id="toolbar-toggle" class="absolute w-full -bottom-8 flex justify-center cursor-pointer">
-            <div class="bg-gray-800/50 backdrop-blur-sm rounded-b-lg p-1">
-                <svg id="toolbar-chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white transition-transform duration-300">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-            </div>
-        </button>
     </div>
+    <!-- Chevron button is now a separate element to ensure it's always visible -->
+    <button id="toolbar-toggle" class="fixed rotated top-0 left-1/2 -translate-x-1/2 translate-y-[130%] z-20 p-2 cursor-pointer bg-gray-800/50 backdrop-blur-sm rounded-b-lg transition-all duration-500">
+        <svg id="toolbar-chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white transition-transform duration-300">
+            <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+    </button>
     
     <!-- Active users display -->
     <div id="activeUsersContainer" class="fixed bottom-4 left-4 bg-gray-800/50 backdrop-blur-sm text-white text-sm font-medium p-2 rounded-lg z-10">
@@ -142,7 +139,7 @@
             const brushSizeLabel = document.getElementById('brushSizeLabel');
             const resetBtn = document.getElementById('resetBtn');
             const downloadBtn = document.getElementById('downloadBtn');
-            const toolbarContainer = document.getElementById('toolbar-container');
+            const toolbar = document.getElementById('toolbar');
             const toolbarToggle = document.getElementById('toolbar-toggle');
             const toolbarChevron = document.getElementById('toolbar-chevron');
             const activeUsersCount = document.getElementById('activeUsersCount');
@@ -189,12 +186,12 @@
 
             // --- Toolbar Auto-hide Logic ---
             function hideToolbar() {
-                toolbarContainer.classList.add('hidden');
+                toolbar.classList.add('hidden');
                 toolbarChevron.classList.remove('rotated');
             }
 
             function showToolbar() {
-                toolbarContainer.classList.remove('hidden');
+                toolbar.classList.remove('hidden');
                 toolbarChevron.classList.add('rotated');
             }
             
@@ -208,8 +205,9 @@
             }
 
             toolbarToggle.addEventListener('click', () => {
-                const isHidden = toolbarContainer.classList.toggle('hidden');
-                toolbarChevron.classList.toggle('rotated', !isHidden);
+                const isHidden = toolbar.classList.toggle('translate-y-[-130%]');
+                toolbarChevron.classList.toggle('rotated', isHidden);
+                toolbarToggle.classList.toggle('translate-y-[130%]', !isHidden);
                 isToolbarManuallyHidden = isHidden;
                 
                 clearTimeout(toolbarTimeout);
@@ -218,8 +216,8 @@
                 }
             });
 
-            toolbarContainer.addEventListener('mouseenter', () => clearTimeout(toolbarTimeout));
-            toolbarContainer.addEventListener('mouseleave', () => {
+            toolbar.addEventListener('mouseenter', () => clearTimeout(toolbarTimeout));
+            toolbar.addEventListener('mouseleave', () => {
                 if (!isToolbarManuallyHidden) resetToolbarTimer();
             });
 
@@ -418,6 +416,7 @@
             setActiveTool('brush');
             await loadDrawing();
             resetToolbarTimer();
+            showToolbar(); // Ensure toolbar is visible and rotated correctly on load
         });
     </script>
 </body>
