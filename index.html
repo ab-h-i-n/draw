@@ -43,6 +43,17 @@
             cursor: pointer;
             border-radius: 50%;
         }
+        /* Styles for the auto-hiding toolbar */
+        #toolbar-container {
+            transition: transform 0.3s ease-in-out;
+        }
+        #toolbar-container.hidden {
+            /* Hides the toolbar but keeps the bottom 40px (the chevron area) visible */
+            transform: translate(-50%, calc(-100% + 40px));
+        }
+        #toolbar-chevron.rotated {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body class="bg-gray-900 m-0 overflow-hidden">
@@ -50,51 +61,61 @@
     <!-- The drawing canvas will take up the full screen -->
     <canvas id="drawingCanvas"></canvas>
 
-    <!-- Toolbar for controls, centered at the top -->
-    <div id="toolbar" class="fixed top-4 left-1/2 -translate-x-1/2 bg-gray-800/50 backdrop-blur-sm shadow-lg rounded-xl p-2 flex items-center gap-2 z-10">
-        
-        <!-- Color Picker -->
-        <div class="relative w-10 h-10">
-            <input type="color" id="colorPicker" value="#FFFFFF" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-            <div id="colorPreview" class="w-full h-full rounded-lg border-2 border-gray-500" style="background-color: #FFFFFF;"></div>
+    <!-- Toolbar container for auto-hide functionality -->
+    <div id="toolbar-container" class="fixed top-0 left-1/2 -translate-x-1/2 w-auto z-10">
+        <!-- The actual toolbar -->
+        <div id="toolbar" class="bg-gray-800/50 backdrop-blur-sm shadow-lg rounded-b-xl p-2 flex flex-wrap justify-center items-center gap-2">
+            <!-- Color Picker -->
+            <div class="relative w-10 h-10">
+                <input type="color" id="colorPicker" value="#FFFFFF" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                <div id="colorPreview" class="w-full h-full rounded-lg border-2 border-gray-500" style="background-color: #FFFFFF;"></div>
+            </div>
+
+            <!-- Brush Tool -->
+            <button id="brushBtn" class="tool-btn active p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Brush">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+            </button>
+
+            <!-- Eraser Tool -->
+            <button id="eraserBtn" class="tool-btn p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Eraser">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7Z"/><path d="M22 21H7"/><path d="m5 12 5 5"/></svg>
+            </button>
+
+            <!-- Brush Size Slider -->
+            <div class="flex items-center gap-2 bg-gray-900 px-3 py-1 rounded-lg">
+                <span id="brushSizeLabel" class="text-white font-medium text-sm w-6 text-center">5</span>
+                <input type="range" id="brushSize" min="1" max="50" value="5" class="w-24 md:w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+            </div>
+
+            <!-- Reset Button -->
+            <button id="resetBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Clear Canvas">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+
+            <!-- Download Button -->
+            <button id="downloadBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Download Image">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            </button>
         </div>
-
-        <!-- Brush Tool -->
-        <button id="brushBtn" class="tool-btn active p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Brush">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-        </button>
-
-        <!-- Eraser Tool -->
-        <button id="eraserBtn" class="tool-btn p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Eraser">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7Z"/><path d="M22 21H7"/><path d="m5 12 5 5"/></svg>
-        </button>
-
-        <!-- Brush Size Slider -->
-        <div class="flex items-center gap-2 bg-gray-900 px-3 py-1 rounded-lg">
-            <span id="brushSizeLabel" class="text-white font-medium text-sm w-6 text-center">5</span>
-            <input type="range" id="brushSize" min="1" max="50" value="5" class="w-24 md:w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
-        </div>
-
-        <!-- Reset Button -->
-        <button id="resetBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Clear Canvas">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        </button>
-
-        <!-- Download Button -->
-        <button id="downloadBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Download Image">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        <!-- Chevron button to toggle toolbar visibility -->
+        <button id="toolbar-toggle" class="absolute w-full -bottom-8 flex justify-center cursor-pointer">
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-b-lg p-1">
+                <svg id="toolbar-chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white transition-transform duration-300">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+            </div>
         </button>
     </div>
     
-    <!-- User ID display -->
-    <div id="userIdContainer" class="fixed bottom-4 left-4 bg-gray-800/50 backdrop-blur-sm text-white text-xs p-2 rounded-lg z-10">
-        Your User ID: <span id="userId"></span>
+    <!-- Active users display -->
+    <div id="activeUsersContainer" class="fixed bottom-4 left-4 bg-gray-800/50 backdrop-blur-sm text-white text-sm font-medium p-2 rounded-lg z-10">
+        Active: <span id="activeUsersCount">0</span>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, onSnapshot, collection, addDoc, query, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, collection, addDoc, query, getDocs, deleteDoc, setDoc, serverTimestamp, updateDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDHjr4mdMfe7ZpwpBy7HJvNkwhtrcnwEo8",
@@ -121,7 +142,10 @@
             const brushSizeLabel = document.getElementById('brushSizeLabel');
             const resetBtn = document.getElementById('resetBtn');
             const downloadBtn = document.getElementById('downloadBtn');
-            const userIdSpan = document.getElementById('userId');
+            const toolbarContainer = document.getElementById('toolbar-container');
+            const toolbarToggle = document.getElementById('toolbar-toggle');
+            const toolbarChevron = document.getElementById('toolbar-chevron');
+            const activeUsersCount = document.getElementById('activeUsersCount');
 
             // --- State Variables ---
             let isDrawing = false;
@@ -129,9 +153,12 @@
             let brushSize = 5;
             let brushColor = '#FFFFFF';
             let userId;
-            let currentStroke = []; // Holds points for the current stroke
+            let currentStroke = [];
+            let toolbarTimeout;
+            let isToolbarManuallyHidden = false;
+            let presenceDocRef;
 
-            // --- Firebase Auth ---
+            // --- Firebase Auth & Presence ---
             try {
                 if (typeof __initial_auth_token !== 'undefined') {
                     await signInWithCustomToken(auth, __initial_auth_token);
@@ -139,14 +166,63 @@
                     await signInAnonymously(auth);
                 }
                 userId = auth.currentUser.uid;
-                userIdSpan.textContent = userId;
+                presenceDocRef = doc(db, `presence/${userId}`);
+                await setDoc(presenceDocRef, { last_seen: serverTimestamp() });
+                setInterval(() => {
+                    if (presenceDocRef) {
+                        updateDoc(presenceDocRef, { last_seen: serverTimestamp() });
+                    }
+                }, 60000);
+                window.addEventListener('beforeunload', () => {
+                    if (presenceDocRef) {
+                        deleteDoc(presenceDocRef);
+                    }
+                });
             } catch (error) {
                 console.error("Authentication Error:", error);
-                userIdSpan.textContent = "Auth Error";
+                activeUsersCount.parentElement.textContent = "Auth Error";
                 return;
             }
 
             const drawingCollection = collection(db, `artifacts/${appId}/public/data/drawing`);
+            const presenceCollection = collection(db, 'presence');
+
+            // --- Toolbar Auto-hide Logic ---
+            function hideToolbar() {
+                toolbarContainer.classList.add('hidden');
+                toolbarChevron.classList.remove('rotated');
+            }
+
+            function showToolbar() {
+                toolbarContainer.classList.remove('hidden');
+                toolbarChevron.classList.add('rotated');
+            }
+            
+            function resetToolbarTimer() {
+                clearTimeout(toolbarTimeout);
+                toolbarTimeout = setTimeout(() => {
+                    if (!isToolbarManuallyHidden) {
+                        hideToolbar();
+                    }
+                }, 3000);
+            }
+
+            toolbarToggle.addEventListener('click', () => {
+                const isHidden = toolbarContainer.classList.toggle('hidden');
+                toolbarChevron.classList.toggle('rotated', !isHidden);
+                isToolbarManuallyHidden = isHidden;
+                
+                clearTimeout(toolbarTimeout);
+                if (!isHidden) {
+                    resetToolbarTimer();
+                }
+            });
+
+            toolbarContainer.addEventListener('mouseenter', () => clearTimeout(toolbarTimeout));
+            toolbarContainer.addEventListener('mouseleave', () => {
+                if (!isToolbarManuallyHidden) resetToolbarTimer();
+            });
+
 
             // --- Canvas Setup ---
             function resizeCanvas() {
@@ -169,25 +245,19 @@
             function getEventPosition(event) {
                 const rect = canvas.getBoundingClientRect();
                 if (event.touches && event.touches.length > 0) {
-                    return {
-                        x: event.touches[0].clientX - rect.left,
-                        y: event.touches[0].clientY - rect.top
-                    };
+                    return { x: event.touches[0].clientX - rect.left, y: event.touches[0].clientY - rect.top };
                 }
-                return {
-                    x: event.clientX - rect.left,
-                    y: event.clientY - rect.top
-                };
+                return { x: event.clientX - rect.left, y: event.clientY - rect.top };
             }
 
             function startDrawing(event) {
                 isDrawing = true;
+                if (!isToolbarManuallyHidden) {
+                    showToolbar();
+                    resetToolbarTimer();
+                }
                 const { x, y } = getEventPosition(event);
-                
-                // Start new stroke
                 currentStroke = [{ x, y }];
-                
-                // Begin local path
                 ctx.beginPath();
                 ctx.moveTo(x, y);
             }
@@ -195,13 +265,11 @@
             function draw(event) {
                 if (!isDrawing) return;
                 event.preventDefault();
-
+                if (!isToolbarManuallyHidden) {
+                    resetToolbarTimer();
+                }
                 const { x, y } = getEventPosition(event);
-
-                // Add point to current stroke
                 currentStroke.push({ x, y });
-
-                // Draw locally for responsiveness
                 ctx.lineTo(x, y);
                 ctx.stroke();
             }
@@ -209,8 +277,6 @@
             function stopDrawing() {
                 if (!isDrawing) return;
                 isDrawing = false;
-
-                // Send the completed stroke to Firestore if it has points
                 if (currentStroke.length > 1) {
                     const strokeData = {
                         points: currentStroke,
@@ -219,14 +285,9 @@
                         tool: activeTool,
                         userId: userId
                     };
-                    addDoc(drawingCollection, strokeData).catch(error => {
-                        console.error("Firestore Write Error:", error);
-                    });
+                    addDoc(drawingCollection, strokeData).catch(error => console.error("Firestore Write Error:", error));
                 }
-                
-                // Clear the stroke array for the next line
                 currentStroke = [];
-                // End the path so the next line doesn't connect
                 ctx.beginPath();
             }
             
@@ -276,43 +337,50 @@
             // --- Function to draw strokes received from Firestore ---
             function drawOnCanvas(data) {
                 if (!data.points || data.points.length < 2) return;
-
                 const originalCompositeOperation = ctx.globalCompositeOperation;
                 const originalStrokeStyle = ctx.strokeStyle;
                 const originalLineWidth = ctx.lineWidth;
-
                 ctx.globalCompositeOperation = data.tool === 'brush' ? 'source-over' : 'destination-out';
                 ctx.strokeStyle = data.color;
                 ctx.lineWidth = data.size;
-                
                 ctx.beginPath();
                 ctx.moveTo(data.points[0].x, data.points[0].y);
                 for (let i = 1; i < data.points.length; i++) {
                     ctx.lineTo(data.points[i].x, data.points[i].y);
                 }
                 ctx.stroke();
-
                 ctx.globalCompositeOperation = originalCompositeOperation;
                 ctx.strokeStyle = originalStrokeStyle;
                 ctx.lineWidth = originalLineWidth;
             }
             
-            // --- Firestore Listener ---
+            // --- Firestore Listeners ---
             onSnapshot(drawingCollection, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const data = change.doc.data();
                     if (change.type === "added" && data.userId !== userId) { 
                         drawOnCanvas(data);
                     }
-                    // When docs are deleted (by clearCanvas), clear the entire canvas.
                     if (change.type === "removed") {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         loadDrawing();
                     }
                 });
-            }, (error) => {
-                console.error("Firestore Snapshot Error:", error);
-            });
+            }, (error) => console.error("Drawing Snapshot Error:", error));
+
+            onSnapshot(presenceCollection, (snapshot) => {
+                const now = Date.now();
+                let activeCount = 0;
+                snapshot.forEach(doc => {
+                    const data = doc.data();
+                    if (data.last_seen && (now - data.last_seen.toMillis()) < 120000) {
+                        activeCount++;
+                    } else {
+                        deleteDoc(doc.ref);
+                    }
+                });
+                activeUsersCount.textContent = activeCount;
+            }, (error) => console.error("Presence Snapshot Error:", error));
 
             // --- Load existing drawing ---
             async function loadDrawing() {
@@ -349,6 +417,7 @@
             resizeCanvas();
             setActiveTool('brush');
             await loadDrawing();
+            resetToolbarTimer();
         });
     </script>
 </body>
