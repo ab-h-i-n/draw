@@ -3,17 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="./style.css">
-    <script src="./script.js"></script>
-    <title>Draw</title>
+    <title>Drawing Board</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a cleaner look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* Custom styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none; /* Prevents scrolling on touch devices while drawing */
+        }
+        canvas {
+            display: block; /* Removes bottom space under the canvas */
+            background-color: #111827; /* A dark gray background */
+            cursor: crosshair;
+        }
+        /* Style for the active tool button */
+        .tool-btn.active {
+            background-color: #4f46e5;
+            color: white;
+        }
+        /* Custom styles for the range slider thumb */
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4f46e5;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #4f46e5;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+    </style>
 </head>
-<body>
+<body class="bg-gray-900 m-0 overflow-hidden">
+
+    <!-- The drawing canvas will take up the full screen -->
     <canvas id="drawingCanvas"></canvas>
-    <div class="buttons">
-        <button id="resetButton">Reset</button>
-        <button id="eraserButton">Eraser Mode: Off</button>
-        <button id="downloadButton">Download Image</button>
+
+    <!-- Toolbar for controls, centered at the top -->
+    <div id="toolbar" class="fixed top-4 left-1/2 -translate-x-1/2 bg-gray-800/50 backdrop-blur-sm shadow-lg rounded-xl p-2 flex items-center gap-2 z-10">
+        
+        <!-- Color Picker -->
+        <div class="relative w-10 h-10">
+            <input type="color" id="colorPicker" value="#FFFFFF" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+            <div id="colorPreview" class="w-full h-full rounded-lg border-2 border-gray-500" style="background-color: #FFFFFF;"></div>
+        </div>
+
+        <!-- Brush Tool -->
+        <button id="brushBtn" class="tool-btn active p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Brush">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
+
+        <!-- Eraser Tool -->
+        <button id="eraserBtn" class="tool-btn p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Eraser">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21H7Z"/><path d="M22 21H7"/><path d="m5 12 5 5"/></svg>
+        </button>
+
+        <!-- Brush Size Slider -->
+        <div class="flex items-center gap-2 bg-gray-900 px-3 py-1 rounded-lg">
+            <span id="brushSizeLabel" class="text-white font-medium text-sm w-6 text-center">5</span>
+            <input type="range" id="brushSize" min="1" max="50" value="5" class="w-24 md:w-32 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer">
+        </div>
+
+        <!-- Reset Button -->
+        <button id="resetBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Clear Canvas">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+
+        <!-- Download Button -->
+        <button id="downloadBtn" class="p-2 rounded-lg hover:bg-gray-700 transition-colors" title="Download Image">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        </button>
     </div>
-    <script src="./script.js"></script>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Element Selection ---
+            const canvas = document.getElementById('drawingCanvas');
+            const ctx = canvas.getContext('2d');
+            const toolbar = document.getElementById('toolbar');
+            const colorPicker = document.getElementById('colorPicker');
+            const colorPreview = document.getElementById('colorPreview');
+            const brushBtn = document.getElementById('brushBtn');
+            const eraserBtn = document.getElementById('eraserBtn');
+            const brushSizeSlider = document.getElementById('brushSize');
+            const brushSizeLabel = document.getElementById('brushSizeLabel');
+            const resetBtn = document.getElementById('resetBtn');
+            const downloadBtn = document.getElementById('downloadBtn');
+
+            // --- State Variables ---
+            let isDrawing = false;
+            let activeTool = 'brush'; // 'brush' or 'eraser'
+            let brushSize = 5;
+            let brushColor = '#FFFFFF';
+            let lastX = 0;
+            let lastY = 0;
+
+            // --- Canvas Setup ---
+            function resizeCanvas() {
+                // Save canvas content before resizing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Resize canvas to fill the window
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                // Restore canvas content after resizing
+                ctx.putImageData(imageData, 0, 0);
+
+                // Re-apply drawing settings as they can be reset on resize
+                applyBrushSettings();
+            }
+
+            function applyBrushSettings() {
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.lineWidth = brushSize;
+                ctx.strokeStyle = brushColor;
+                // Set the composite operation based on the active tool
+                ctx.globalCompositeOperation = activeTool === 'brush' ? 'source-over' : 'destination-out';
+            }
+
+            // --- Drawing Logic ---
+            function getEventPosition(event) {
+                // Handles both mouse and touch events
+                const rect = canvas.getBoundingClientRect();
+                if (event.touches && event.touches.length > 0) {
+                    return {
+                        x: event.touches[0].clientX - rect.left,
+                        y: event.touches[0].clientY - rect.top
+                    };
+                }
+                return {
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top
+                };
+            }
+
+            function startDrawing(event) {
+                isDrawing = true;
+                const { x, y } = getEventPosition(event);
+                [lastX, lastY] = [x, y];
+            }
+
+            function draw(event) {
+                if (!isDrawing) return;
+                event.preventDefault(); // Prevent scrolling on touch
+
+                const { x, y } = getEventPosition(event);
+                
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+
+                [lastX, lastY] = [x, y];
+            }
+
+            function stopDrawing() {
+                isDrawing = false;
+            }
+            
+            // --- Tool and Control Handlers ---
+            function setActiveTool(tool) {
+                activeTool = tool;
+                if (tool === 'brush') {
+                    brushBtn.classList.add('active');
+                    eraserBtn.classList.remove('active');
+                    ctx.globalCompositeOperation = 'source-over'; // Normal drawing
+                    applyBrushSettings();
+                } else { // Eraser
+                    eraserBtn.classList.add('active');
+                    brushBtn.classList.remove('active');
+                    ctx.globalCompositeOperation = 'destination-out'; // Erases to transparent
+                }
+            }
+
+            function updateBrushSize(size) {
+                brushSize = size;
+                brushSizeLabel.textContent = size;
+                ctx.lineWidth = brushSize;
+            }
+
+            function updateBrushColor(color) {
+                brushColor = color;
+                colorPreview.style.backgroundColor = color;
+                // Only change strokeStyle if the brush is active
+                if (activeTool === 'brush') {
+                    ctx.strokeStyle = brushColor;
+                }
+            }
+
+            function clearCanvas() {
+                // A confirmation dialog to prevent accidental clearing
+                if (confirm('Are you sure you want to clear the canvas?')) {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            }
+
+            function downloadImage() {
+                const link = document.createElement('a');
+                link.download = 'my-drawing.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+
+            // --- Event Listeners ---
+            // Drawing events
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mouseout', stopDrawing); // Stop if mouse leaves canvas
+
+            // Touch events
+            canvas.addEventListener('touchstart', startDrawing);
+            canvas.addEventListener('touchmove', draw);
+            canvas.addEventListener('touchend', stopDrawing);
+
+            // Toolbar controls
+            colorPicker.addEventListener('input', (e) => updateBrushColor(e.target.value));
+            brushSizeSlider.addEventListener('input', (e) => updateBrushSize(e.target.value));
+            brushBtn.addEventListener('click', () => setActiveTool('brush'));
+            eraserBtn.addEventListener('click', () => setActiveTool('eraser'));
+            resetBtn.addEventListener('click', clearCanvas);
+            downloadBtn.addEventListener('click', downloadImage);
+
+            // Window resize
+            window.addEventListener('resize', resizeCanvas);
+
+            // --- Initialization ---
+            resizeCanvas(); // Set initial canvas size
+            setActiveTool('brush'); // Set brush as the default tool
+        });
+    </script>
 </body>
 </html>
