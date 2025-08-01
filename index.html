@@ -98,7 +98,7 @@
         </div>
     </div>
     <!-- Chevron button is now a separate element to ensure it's always visible -->
-    <button id="toolbar-toggle" class="fixed rotated top-0 left-1/2 -translate-x-1/2 translate-y-[130%] z-20 p-2 cursor-pointer bg-gray-800/50 backdrop-blur-sm rounded-b-lg transition-all duration-500">
+    <button id="toolbar-toggle" class="fixed rotated top-0 left-1/2 -translate-x-1/2 translate-y-[350%] sm:translate-y-[130%] z-20 p-2 cursor-pointer bg-gray-800/50 backdrop-blur-sm rounded-b-lg transition-all duration-500">
         <svg id="toolbar-chevron" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-white transition-transform duration-300">
             <polyline points="18 15 12 9 6 15"></polyline>
         </svg>
@@ -207,7 +207,8 @@
             toolbarToggle.addEventListener('click', () => {
                 const isHidden = toolbar.classList.toggle('translate-y-[-130%]');
                 toolbarChevron.classList.toggle('rotated', isHidden);
-                toolbarToggle.classList.toggle('translate-y-[130%]', !isHidden);
+                toolbarToggle.classList.toggle('translate-y-[350%]', !isHidden);
+                toolbar.classList.toggle('sm:translate-y-[130%]', !isHidden);
                 isToolbarManuallyHidden = isHidden;
                 
                 clearTimeout(toolbarTimeout);
