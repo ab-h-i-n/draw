@@ -94,7 +94,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, addDoc, query, where, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, onSnapshot, collection, addDoc, query, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDHjr4mdMfe7ZpwpBy7HJvNkwhtrcnwEo8",
@@ -114,9 +114,7 @@
             // --- Element Selection ---
             const canvas = document.getElementById('drawingCanvas');
             const ctx = canvas.getContext('2d');
-            const toolbar = document.getElementById('toolbar');
             const colorPicker = document.getElementById('colorPicker');
-            const colorPreview = document.getElementById('colorPreview');
             const brushBtn = document.getElementById('brushBtn');
             const eraserBtn = document.getElementById('eraserBtn');
             const brushSizeSlider = document.getElementById('brushSize');
@@ -127,7 +125,7 @@
 
             // --- State Variables ---
             let isDrawing = false;
-            let activeTool = 'brush'; // 'brush' or 'eraser'
+            let activeTool = 'brush';
             let brushSize = 5;
             let brushColor = '#FFFFFF';
             let lastX = 0;
@@ -146,7 +144,7 @@
             } catch (error) {
                 console.error("Authentication Error:", error);
                 userIdSpan.textContent = "Auth Error";
-                return; // Stop execution if auth fails
+                return;
             }
 
             const drawingCollection = collection(db, `artifacts/${appId}/public/data/drawing`);
@@ -187,16 +185,23 @@
                 isDrawing = true;
                 const { x, y } = getEventPosition(event);
                 [lastX, lastY] = [x, y];
-                // Immediately draw a dot on start
-                draw(event, true);
+                
+                // Begin a new path for smooth local drawing
+                ctx.beginPath();
+                ctx.moveTo(lastX, lastY);
             }
 
-            async function draw(event, isDot = false) {
+            async function draw(event) {
                 if (!isDrawing) return;
                 event.preventDefault();
 
                 const { x, y } = getEventPosition(event);
+
+                // Draw locally for a smooth, responsive experience
+                ctx.lineTo(x, y);
+                ctx.stroke();
                 
+                // Prepare data segment for other users
                 const drawData = {
                     startX: lastX,
                     startY: lastY,
@@ -208,20 +213,20 @@
                     userId: userId
                 };
 
-                // Draw locally immediately for responsiveness
-                drawOnCanvas(drawData);
-
-                try {
-                    await addDoc(drawingCollection, drawData);
-                } catch (error) {
+                // Send data to Firestore without waiting
+                addDoc(drawingCollection, drawData).catch(error => {
                     console.error("Firestore Write Error:", error);
-                }
+                });
 
+                // Update the last position for the next segment
                 [lastX, lastY] = [x, y];
             }
 
             function stopDrawing() {
+                if (!isDrawing) return;
                 isDrawing = false;
+                // Reset the path to end the current line, so the next one doesn't connect
+                ctx.beginPath();
             }
             
             // --- Tool and Control Handlers ---
@@ -251,18 +256,11 @@
 
             async function clearCanvas() {
                 if (confirm('Are you sure you want to clear the canvas for everyone?')) {
-                    // Clear local canvas immediately
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Delete documents in Firestore
                     const q = query(drawingCollection);
                     const querySnapshot = await getDocs(q);
-                    querySnapshot.forEach(async (doc) => {
-                        try {
-                            await deleteDoc(doc.ref);
-                        } catch (error) {
-                            console.error("Error deleting document:", error);
-                        }
+                    querySnapshot.forEach(doc => {
+                        deleteDoc(doc.ref).catch(error => console.error("Error deleting document:", error));
                     });
                 }
             }
@@ -274,7 +272,7 @@
                 link.click();
             }
             
-            // --- Draw from Firestore data ---
+            // --- Function to draw segments received from Firestore ---
             function drawOnCanvas(data) {
                 const originalCompositeOperation = ctx.globalCompositeOperation;
                 const originalStrokeStyle = ctx.strokeStyle;
@@ -294,17 +292,15 @@
             }
             
             // --- Firestore Listener ---
-            const unsubscribe = onSnapshot(drawingCollection, (snapshot) => {
+            onSnapshot(drawingCollection, (snapshot) => {
                 snapshot.docChanges().forEach((change) => {
                     const data = change.doc.data();
-                    // To prevent re-drawing our own lines which are now drawn locally first
                     if (change.type === "added" && data.userId !== userId) { 
                         drawOnCanvas(data);
                     }
-                    // Handle remote clearing of canvas
                     if (change.type === "removed") {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
-                        loadDrawing(); // Redraw remaining items
+                        loadDrawing();
                     }
                 });
             }, (error) => {
@@ -323,7 +319,6 @@
                      console.error("Error loading initial drawing:", error);
                  }
             }
-
 
             // --- Event Listeners ---
             canvas.addEventListener("mousedown", startDrawing);
