@@ -128,9 +128,8 @@
             let activeTool = 'brush';
             let brushSize = 5;
             let brushColor = '#FFFFFF';
-            let lastX = 0;
-            let lastY = 0;
             let userId;
+            let currentStroke = []; // Holds points for the current stroke
 
             // --- Firebase Auth ---
             try {
@@ -184,48 +183,50 @@
             function startDrawing(event) {
                 isDrawing = true;
                 const { x, y } = getEventPosition(event);
-                [lastX, lastY] = [x, y];
                 
-                // Begin a new path for smooth local drawing
+                // Start new stroke
+                currentStroke = [{ x, y }];
+                
+                // Begin local path
                 ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
+                ctx.moveTo(x, y);
             }
 
-            async function draw(event) {
+            function draw(event) {
                 if (!isDrawing) return;
                 event.preventDefault();
 
                 const { x, y } = getEventPosition(event);
 
-                // Draw locally for a smooth, responsive experience
+                // Add point to current stroke
+                currentStroke.push({ x, y });
+
+                // Draw locally for responsiveness
                 ctx.lineTo(x, y);
                 ctx.stroke();
-                
-                // Prepare data segment for other users
-                const drawData = {
-                    startX: lastX,
-                    startY: lastY,
-                    endX: x,
-                    endY: y,
-                    color: brushColor,
-                    size: brushSize,
-                    tool: activeTool,
-                    userId: userId
-                };
-
-                // Send data to Firestore without waiting
-                addDoc(drawingCollection, drawData).catch(error => {
-                    console.error("Firestore Write Error:", error);
-                });
-
-                // Update the last position for the next segment
-                [lastX, lastY] = [x, y];
             }
 
             function stopDrawing() {
                 if (!isDrawing) return;
                 isDrawing = false;
-                // Reset the path to end the current line, so the next one doesn't connect
+
+                // Send the completed stroke to Firestore if it has points
+                if (currentStroke.length > 1) {
+                    const strokeData = {
+                        points: currentStroke,
+                        color: brushColor,
+                        size: brushSize,
+                        tool: activeTool,
+                        userId: userId
+                    };
+                    addDoc(drawingCollection, strokeData).catch(error => {
+                        console.error("Firestore Write Error:", error);
+                    });
+                }
+                
+                // Clear the stroke array for the next line
+                currentStroke = [];
+                // End the path so the next line doesn't connect
                 ctx.beginPath();
             }
             
@@ -272,8 +273,10 @@
                 link.click();
             }
             
-            // --- Function to draw segments received from Firestore ---
+            // --- Function to draw strokes received from Firestore ---
             function drawOnCanvas(data) {
+                if (!data.points || data.points.length < 2) return;
+
                 const originalCompositeOperation = ctx.globalCompositeOperation;
                 const originalStrokeStyle = ctx.strokeStyle;
                 const originalLineWidth = ctx.lineWidth;
@@ -281,9 +284,12 @@
                 ctx.globalCompositeOperation = data.tool === 'brush' ? 'source-over' : 'destination-out';
                 ctx.strokeStyle = data.color;
                 ctx.lineWidth = data.size;
+                
                 ctx.beginPath();
-                ctx.moveTo(data.startX, data.startY);
-                ctx.lineTo(data.endX, data.endY);
+                ctx.moveTo(data.points[0].x, data.points[0].y);
+                for (let i = 1; i < data.points.length; i++) {
+                    ctx.lineTo(data.points[i].x, data.points[i].y);
+                }
                 ctx.stroke();
 
                 ctx.globalCompositeOperation = originalCompositeOperation;
@@ -298,6 +304,7 @@
                     if (change.type === "added" && data.userId !== userId) { 
                         drawOnCanvas(data);
                     }
+                    // When docs are deleted (by clearCanvas), clear the entire canvas.
                     if (change.type === "removed") {
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         loadDrawing();
